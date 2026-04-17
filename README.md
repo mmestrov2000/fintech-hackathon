@@ -1,8 +1,10 @@
 # Customer Churn Prediction — HPB Fintech Hackathon 2026
 
-Predicting customer churn for a Croatian bank using client, product, transaction, balance, and contact-center data.
+Predicting customer churn for a Croatian bank using client, product, transaction, balance, and contact-center data — and selecting the **optimal retention action** per customer.
 
 ## Approach
+
+### Model 1 — Churn Prediction (LightGBM)
 
 - **Feature window**: Apr-Dec 2025 (9 months of behavioral data)
 - **Churn window**: Jan-Mar 2026
@@ -14,6 +16,14 @@ The work evolved in two modeling stages:
 
 - **Baseline model**: 10 interpretable features
 - **Enhanced model**: 20 features total, adding 10 new signals from unused raw columns
+
+### Model 2 — Contextual Bandit for Retention Actions
+
+- **Architecture**: Ridge reward model per action ($\hat{\mu}_a(x) = \theta_a^\top x$)
+- **Actions**: no action, push notification (€0.50), email (€8), call (€80)
+- **Reward**: $R_i = (1 - Y_i) \cdot v_i - c(A_i)$ (retained revenue minus action cost)
+- **Training**: 24-month cumulative Ridge refit with ε-greedy exploration
+- **Key features**: cost-aware regularization, progressive call gating, HTE-aware context vectors
 
 ## Repository Structure
 
@@ -29,6 +39,9 @@ notebooks/
   02_data_preparation.ipynb        # Missing value handling and feature checks
   03_model_lightgbm.ipynb          # Baseline LightGBM model with 10 features
   04_enhanced_features_model.ipynb # Enhanced LightGBM model with 20 features
+  05_contextual_bandit.ipynb       # Contextual bandit for retention action selection
+scripts/
+  generate_bandit_dataset.py       # Generates bandit training data from churn scores
 requirements.txt
 ```
 
@@ -69,7 +82,9 @@ pip install -r requirements.txt
 
 Run the notebooks in order:
 
-`01_eda` -> `02_data_preparation` -> `03_model_lightgbm` -> `04_enhanced_features_model`
+`01_eda` → `02_data_preparation` → `03_model_lightgbm` → `04_enhanced_features_model` → `05_contextual_bandit`
+
+Notebook 05 requires running `scripts/generate_bandit_dataset.py` first (uses output from notebook 04).
 
 ## Results
 
@@ -91,6 +106,15 @@ Run the notebooks in order:
 
 This improves F1 from **0.386** to **0.583**, a **+51.1%** gain over the baseline.
 
+### Contextual Bandit: Notebook 05
+
+The learned policy outperforms all baselines on holdout (last 6 months):
+
+- Beats "always no action" — targeted interventions save revenue
+- Beats "always call" — avoids wasting €80 on low-value customers
+- Calls concentrate on high-value, high-risk customers (D10 call rate >> D1)
+- Model learns progressively: call fraction rises from ~0% (months 1–6) to steady state (months 19–24)
+
 ## Most Impactful Features
 
 Based on the enhanced LightGBM model, the strongest churn drivers were:
@@ -105,8 +129,12 @@ Other strong new signals included `credit_rating`, `avg_product_age_years`, `rec
 
 - `data/output/churn_risk_scores.csv` — baseline model scores
 - `data/output/churn_risk_scores_v2.csv` — enhanced model scores
+- `data/output/bandit_training_dataset.csv` — bandit training data (generated)
+- `data/output/bandit_*.png` — bandit model visualizations (learning progression, heatmaps, policy comparison, etc.)
 
-The final pipeline supports threshold tuning depending on campaign economics:
+The churn prediction pipeline supports threshold tuning depending on campaign economics:
 
 - lower threshold for broader recall-oriented retention campaigns
 - higher threshold for precision-oriented expensive interventions
+
+The contextual bandit pipeline selects the cost-optimal retention action per customer, balancing intervention cost against churn reduction benefit.
