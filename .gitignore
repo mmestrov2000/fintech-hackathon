@@ -1,0 +1,17 @@
+# Virtual environments
+.venv/
+__pycache__/
+
+# Large source data (Excel + intermediate CSVs)
+data/*.xlsx
+data/klijenti.csv
+data/kontakt.csv
+data/proizvodi.csv
+data/stanja.csv
+data/transakcije.csv
+
+# Keep the training dataset
+!data/churn_training.csv
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
