@@ -22,6 +22,3 @@ data/churn_risk_scores.csv
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
-
-# Competition docs
-docs/
