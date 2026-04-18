@@ -1,0 +1,196 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\title{Contextual Bandit Formulation for Fintech Churn Retention}
+\author{}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Problem Setting}
+
+We model churn-retention as a stochastic contextual bandit over \(T\) decision rounds.  
+At each round \(t=1,\dots,T\):
+
+\begin{enumerate}[label=\arabic*.]
+    \item A customer context \(x_t \in \mathcal{X} \subseteq \mathbb{R}^d\) is observed.
+    \item A feasible set of retention actions \(A_t \subseteq A=\{1,\dots,K\}\) is available.
+    \item The decision policy selects an action \(a_t \in A_t\).
+    \item A reward \(r_t \in \mathbb{R}\) is observed only for the chosen action.
+\end{enumerate}
+
+The objective is to learn a policy \(\pi(a \mid x)\) maximizing expected cumulative reward:
+\[
+\max_{\pi} \; \mathbb{E}_{\pi}\left[\sum_{t=1}^T r_t\right].
+\]
+
+\section{Fintech Mapping}
+
+\subsection*{Context}
+
+The context vector \(x_t\) summarizes the state of customer \(i_t\) at time \(t\), for example:
+\begin{itemize}
+    \item demographic and segment variables,
+    \item behavioral variables such as recency, frequency, and monetary value,
+    \item engagement signals such as app usage and support contacts,
+    \item churn-risk and customer lifetime value estimates,
+    \item previous offers and responses.
+\end{itemize}
+
+\subsection*{Actions}
+
+Each action corresponds to a retention measure:
+\[
+A=\left\{
+a^{(0)}\text{ no action},\;
+a^{(1)}\text{ message},\;
+a^{(2)}\text{ fee waiver},\;
+a^{(3)}\text{ cashback},\;
+a^{(4)}\text{ rate boost},\;
+a^{(5)}\text{ human outreach}
+\right\}.
+\]
+
+The feasible subset \(A_t\) may depend on eligibility, compliance, and budget constraints.
+
+\subsection*{Reward}
+
+Let \(V_H(x_t,a)\) denote the expected customer value over a fixed horizon \(H\) if action \(a\) is applied in context \(x_t\).  
+Using \(a^{(0)}\) (no action) as the baseline, define the incremental value of action \(a\) by
+\[
+\Delta V_H(x_t,a) = V_H(x_t,a) - V_H(x_t,a^{(0)}).
+\]
+
+We then define the reward as the \emph{incremental net value}
+\[
+r_t = \Delta V_H(x_t,a_t) - c(a_t),
+\]
+where \(c(a_t)\geq 0\) is the cost of the selected retention action.
+
+Equivalently,
+\[
+r_t = V_H(x_t,a_t) - V_H(x_t,a^{(0)}) - c(a_t).
+\]
+
+This definition is important: the policy does not maximize raw future revenue, but only the \emph{additional} value created by intervening relative to doing nothing. Hence, for a customer who is already valuable and unlikely to churn, the optimal decision may be \(a^{(0)}\).
+
+\section{Statistical Model}
+
+Let \(\phi(x_t,a)\in\mathbb{R}^m\) be a joint feature map for context-action pairs. A practical choice is
+\[
+\phi(x_t,a)=\bigl[x_t;\; \mathrm{onehot}(a);\; x_t \odot \mathrm{onehot}(a)\bigr],
+\]
+so that the model captures both customer effects and action-specific interactions.
+
+A linear contextual bandit assumes
+\[
+\mathbb{E}[r_t \mid x_t, a_t=a] = \phi(x_t,a)^\top \theta^\star,
+\]
+for an unknown parameter vector \(\theta^\star \in \mathbb{R}^m\).
+
+Under this specification, the model directly learns the expected incremental net value of each action for each customer context.
+
+\section{Recommended Learning Rule}
+
+A suitable algorithm is linear contextual Thompson Sampling. We assume
+\[
+r_t = \phi(x_t,a_t)^\top \theta^\star + \varepsilon_t,
+\qquad
+\varepsilon_t \sim \mathcal{N}(0,\sigma^2),
+\]
+with Gaussian prior
+\[
+\theta^\star \sim \mathcal{N}(\mu_1,\Sigma_1).
+\]
+
+At round \(t\), given the posterior
+\[
+\theta^\star \mid \mathcal{D}_{t-1} \sim \mathcal{N}(\mu_t,\Sigma_t),
+\]
+the algorithm proceeds as follows:
+
+\begin{enumerate}[label=\arabic*.]
+    \item Sample
+    \[
+    \tilde{\theta}_t \sim \mathcal{N}(\mu_t,\Sigma_t).
+    \]
+    \item Select
+    \[
+    a_t
+    =
+    \arg\max_{a \in A_t}
+    \phi(x_t,a)^\top \tilde{\theta}_t.
+    \]
+    \item Observe the reward \(r_t\).
+    \item Update the posterior parameters:
+    \[
+    \Sigma_{t+1}^{-1}
+    =
+    \Sigma_t^{-1}
+    +
+    \frac{1}{\sigma^2}\phi_t\phi_t^\top,
+    \]
+    \[
+    \mu_{t+1}
+    =
+    \Sigma_{t+1}
+    \left(
+    \Sigma_t^{-1}\mu_t
+    +
+    \frac{1}{\sigma^2}\phi_t r_t
+    \right),
+    \]
+    where \(\phi_t := \phi(x_t,a_t)\).
+\end{enumerate}
+
+Equivalently, one may define
+\[
+V_t = \Sigma_t^{-1},
+\qquad
+b_t = V_t \mu_t,
+\]
+so that the update becomes
+\[
+V_{t+1} = V_t + \frac{1}{\sigma^2}\phi_t\phi_t^\top,
+\qquad
+b_{t+1} = b_t + \frac{1}{\sigma^2}\phi_t r_t,
+\]
+and
+\[
+\mu_{t+1} = V_{t+1}^{-1} b_{t+1}.
+\]
+
+Thus, after each observed reward, the posterior mean and covariance are
+updated using the chosen context-action feature vector \(\phi_t\), and the
+next action is sampled according to the updated posterior.
+
+\section{Recommended Learning Rule}
+
+A suitable algorithm is contextual Thompson Sampling with linear rewards.
+At each round:
+
+\begin{enumerate}[label=\arabic*.]
+    \item Maintain a posterior distribution over \(\theta^\star\).
+    \item Sample \(\tilde{\theta}_t\) from the posterior.
+    \item Select
+    \[
+    a_t
+    =
+    \arg\max_{a \in A_t}
+    \phi(x_t,a)^\top \tilde{\theta}_t.
+    \]
+    \item Observe \(r_t\) and update the posterior.
+\end{enumerate}
+
+Since \(a^{(0)}\) is part of the action set, the algorithm can explicitly learn when the best intervention is to do nothing.
+
+\end{document}
