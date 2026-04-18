@@ -1,0 +1,266 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{eurosym}
+\usepackage[hidelinks]{hyperref}
+
+\providecommand{\EUR}[1]{\euro{}#1}
+
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=1.4em,itemsep=0.25em,topsep=0.2em}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=0.25em,topsep=0.2em}
+
+\title{Hackathon Pitch Script: Value-Aware Churn Retention System\\
+\large 7-Minute Investor and Jury Narrative}
+\author{Team Name Placeholder}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{How to Use This Document}
+This is a speaker-ready pitch script designed for a \textbf{7-minute} presentation. It is not a copy of the methodology report. It is optimized for business impact first, then technical credibility.
+
+\textbf{Suggested timing plan:}
+\begin{itemize}
+    \item 0:00--0:50 Hook and problem framing
+    \item 0:50--1:50 Customer journey story (2 personas)
+    \item 1:50--3:00 Solution overview and operating loop
+    \item 3:00--3:45 Model 1 and dataset (concise)
+    \item 3:45--5:05 Model 2 and dataset (core innovation)
+    \item 5:05--6:15 Proof of concept and results
+    \item 6:15--7:00 Limitations, roadmap, and close
+\end{itemize}
+
+\section{Hook and Problem Framing (0:00--0:50)}
+\textbf{Opening line:} Most banks already have churn scores. The real question is: \emph{what action should we take now, for this customer, to maximize value?}
+
+Today, retention is often done manually, by campaign rules or gut feeling:
+\begin{itemize}
+    \item teams decide interventions ad hoc,
+    \item expensive actions are overused on low-value customers,
+    \item outcomes are weakly tracked and rarely fed back into decisioning.
+\end{itemize}
+
+\textbf{Our thesis:} churn prediction alone is not enough. We need a system that decides:
+\begin{enumerate}
+    \item \textbf{who to target}, and
+    \item \textbf{which action} maximizes expected net profit.
+\end{enumerate}
+
+So we optimize not for ``fewest churns,'' but for \textbf{highest retention value after intervention cost}.
+
+\section{Customer Journey Story (0:50--1:50)}
+\textbf{We tell the story through two customers flagged as high churn risk by Model 1.}
+
+\subsection*{Persona A: Low-value digital customer}
+\begin{itemize}
+    \item Uses one product, low balance, mostly app interactions, low expected annual value.
+    \item Model 1 flags elevated risk based on recent behavior change.
+    \item Model 2 evaluates all available actions and selects a \textbf{low-cost push notification with cashback offer}.
+\end{itemize}
+
+\textbf{Why this is optimal:} calling this customer would cost more than expected retained value. A lightweight nudge is economically rational.
+
+\subsection*{Persona B: High-value relationship customer}
+\begin{itemize}
+    \item Multiple products, high balance, strong long-term contribution, sudden churn signals.
+    \item Model 1 flags high risk and high value at risk.
+    \item Model 2 selects \textbf{escalate to banker} (operationally represented by the high-touch action in our action set), with a \textbf{ticket and AI summary sent by email} to speed intervention quality.
+\end{itemize}
+
+\textbf{Why this is optimal:} high-touch action is expensive, but justified by expected value recovery.
+
+\textbf{Message to jury:} same risk, different economics, different action. Based on the data, not on the gut feeling.
+
+\section{Solution Overview (1:50--3:00)}
+Our system is a 2-model operating loop:
+\begin{enumerate}
+    \item \textbf{Activation by Model 1 (risk gate):}
+    \[
+    r(x_i) = \Pr(Y_i=1\mid X=x_i), \qquad \text{activate if } r(x_i) > t.
+    \]
+    \item \textbf{Action optimization by Model 2 (contextual bandit):}
+    choose one action from $\mathcal{A}$ that maximizes expected net reward:
+    \[
+    a_i=\arg\max_{a\in\mathcal{A}}\,\hat\mu_a(x_i),
+    \qquad
+    r_i=(1-Y_i)\,v_i-\lambda c(a_i).
+    \]
+    \item \textbf{Outcome after 90 days:}
+    observe $Y_i\in\{0,1\}$, where $Y_i=1$ means full churn.
+    \item \textbf{Feedback loop:}
+    update Model 2 parameters with observed reward:
+    \[
+    \theta_{a_i}\leftarrow\theta_{a_i}+\eta\big(r_i-\theta_{a_i}^\top x_i\big)x_i.
+    \]
+\end{enumerate}
+
+\begin{figure}[htbp]
+\centering
+\fbox{%
+\begin{minipage}{0.94\linewidth}
+\small
+\textbf{Operational Loop (simple view)}
+\[
+\boxed{r(x_i)>t}\;\Longrightarrow\;\boxed{a_i=\arg\max_{a\in\mathcal{A}}\hat\mu_a(x_i)}\;\Longrightarrow\;\boxed{Y_i\text{ at }+90\text{d}}\;\Longrightarrow\;\boxed{\theta_{a_i}\leftarrow\theta_{a_i}+\eta\big(r_i-\theta_{a_i}^\top x_i\big)x_i}
+\]
+with
+\[
+r_i=(1-Y_i)\,v_i-\lambda c(a_i),
+\]
+where $v_i$ is customer value, $c(a_i)$ is action cost, and $\lambda$ is cost sensitivity.
+\end{minipage}}
+\caption{Risk-gated, value-aware retention decision loop used in the hackathon pipeline.}
+\end{figure}
+
+\textbf{Interpretation:} first decide if intervention is worth considering, then choose the best action economically, then learn from delayed outcome.
+
+\section{Model 1 + Dataset (3:00--3:45)}
+We keep this concise in the live pitch.
+
+\textbf{Dataset and setup:}
+\begin{itemize}
+    \item 9-month feature window, 90-day churn horizon.
+    \item At-risk cohort: customers with active products at reference time.
+    \item Size: $n=7{,}805$, with 131 churn events (1.7\%).
+\end{itemize}
+
+\textbf{Modeling stack:}
+\begin{itemize}
+    \item LightGBM classifier,
+    \item class imbalance handling with SMOTE (train folds only),
+    \item Optuna tuning (150 trials, stratified CV),
+    \item SHAP for explainability.
+\end{itemize}
+
+\textbf{Performance (test):}
+\begin{itemize}
+    \item Best threshold $t=0.88$,
+    \item F1 $=0.5833$ (precision 0.6364, recall 0.5385),
+    \item improved from baseline F1 $=0.3860$.
+\end{itemize}
+
+\textbf{Most important signals (from engineered feature set):}
+recency, product depth, transaction/balance dynamics, digital behavior, and complaint/contact intensity.
+
+\section{Model 2 + Dataset (3:45--5:05)}
+\subsection*{Activation flow}
+Model 2 runs only on activated events:
+\[
+r(x_i) > t.
+\]
+This controls spend and avoids applying interventions to customers with marginal risk.
+
+\subsection*{Action set and learning objective}
+For hackathon scope, we use:
+\[
+\mathcal{A}=\{\text{no action},\ \text{push notification},\ \text{email},\ \text{call/escalation}\}.
+\]
+
+Business interpretation:
+\begin{itemize}
+    \item no action: preserve budget,
+    \item push/email: scalable low-cost nudges,
+    \item call/escalation: expensive but powerful high-touch intervention.
+\end{itemize}
+
+\textbf{Objective (value-aware):}
+\[
+\pi^\star(x)\in\arg\max_{a\in\mathcal A}\mu_a(x),
+\qquad
+\mu_a(x)=\mathbb{E}\big[(1-Y)v-\lambda c(a)\mid X=x,A=a\big].
+\]
+
+This is the key distinction: the policy learns \emph{economic} uplift, not just churn reduction.
+
+\subsection*{Outcome observation and update}
+At $+90$ days, we observe churn outcome and compute reward. For linear per-action models:
+\[
+\hat\mu_a(x)=\theta_a^\top x,
+\]
+only the chosen action is updated after observation:
+\[
+\theta_{a_i}\leftarrow\theta_{a_i}+\eta\big(r_i-\theta_{a_i}^\top x_i\big)x_i.
+\]
+
+\textbf{Intuition for non-technical audience:} every decision becomes new evidence; over time, the model allocates costly actions only where they pay off.
+
+\section{Proof of Concept Results (5:05--6:15)}
+This section summarizes \texttt{05\_contextual\_bandit.ipynb}.
+
+\textbf{Important context:} this is a controlled offline experiment with known ground-truth expected rewards per action, enabling exact policy comparison.
+
+\textbf{Learning signals observed:}
+\begin{itemize}
+    \item Cumulative revenue saved vs no-action baseline in simulation: \textbf{\EUR{16,588,031}}.
+    \item Early months (1--6): average improvement vs no-action \textbf{+\EUR{132.8}/customer}, call fraction \textbf{0.0\%}.
+    \item Late months (last 6): average improvement \textbf{+\EUR{290.8}/customer}, call fraction \textbf{20.0\%}.
+\end{itemize}
+
+\textbf{Holdout (last 6 months):}
+\begin{itemize}
+    \item 16,386 rows (2025-07 to 2025-12),
+    \item learned policy expected reward: \textbf{\EUR{3,940}/customer}.
+\end{itemize}
+
+\textbf{Action mix of learned policy (holdout):}
+\begin{itemize}
+    \item no action: 13.3\%
+    \item push notification: 27.6\%
+    \item email: 34.0\%
+    \item call/escalation: 25.1\%
+\end{itemize}
+
+\textbf{Net revenue saved per customer vs do-nothing:}
+\begin{itemize}
+    \item Learned policy: \textbf{+\EUR{292}}
+    \item Always email: +\EUR{117}
+    \item Always push: +\EUR{52}
+    \item Uniform random: -\EUR{5}
+    \item Always call: -\EUR{188}
+\end{itemize}
+
+\textbf{Interpretation:} the model avoids the expensive ``always call'' trap and selectively deploys high-touch actions where value justifies cost.
+
+\textbf{Further diagnostics from notebook:}
+\begin{itemize}
+    \item Call fraction months 1--6: 5.0\%; months 19--24: 25.0\%.
+    \item Call targeting by value decile: D1 = 0.0\%, D10 = 25.1\%.
+    \item Call targeting by risk decile: R1 = 0.0\%, R10 = 64.9\%.
+\end{itemize}
+
+\textbf{Projected impact (scenario in notebook):}
+\begin{itemize}
+    \item holdout-based annual savings: \textbf{\EUR{4,218,085}},
+    \item steady-state annual savings estimate: \textbf{\EUR{4,388,748}},
+    \item cumulative over 24 months: \textbf{\EUR{7,305,936}}.
+\end{itemize}
+
+\section{Future Steps and Limitations (6:15--7:00)}
+\textbf{Current limitations (transparent):}
+\begin{itemize}
+    \item one-step bandit: one action per decision event,
+    \item delayed reward and potential confounding from historical policies,
+    \item dependence on logging quality and propensity data,
+    \item risk-gating may hide effects outside activated population.
+\end{itemize}
+
+\textbf{Roadmap:}
+\begin{enumerate}
+    \item Move from \textbf{single action} to \textbf{multi-step retention journeys} (action sequences and workflows).
+    \item Add richer causal/off-policy evaluation and stronger uncertainty calibration.
+    \item Upgrade action space with campaign-specific variants and channel orchestration.
+    \item Integrate banker copilot layer for faster, consistent high-touch execution.
+    \item Introduce policy guardrails (budget caps, fairness, compliance constraints) in optimization.
+\end{enumerate}
+
+\section*{Closing Line}
+We built a system that does not stop at predicting churn. It decides the right action, for the right customer, at the right cost, and learns from outcomes. That is the path from analytics to measurable retention profit.
+
+\end{document}

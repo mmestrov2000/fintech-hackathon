@@ -1,0 +1,217 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=1.4em,itemsep=0.2em,topsep=0.2em}
+\setlist[enumerate]{leftmargin=1.6em,itemsep=0.2em,topsep=0.2em}
+
+\title{Churn-Retention Optimization with Contextual Bandits\\
+\large Fintech Hackathon Methodology Report}
+\author{Team Name Placeholder}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Problem statement}
+Customer retention is a core strategic objective in retail finance because customer acquisition is costly and product relationships are long-term. Institutions typically monitor churn risk through predictive analytics, but operational retention decisions are often still rule-based (for example, defaulting to manual calls) and difficult to scale consistently across a large portfolio.
+
+Against this background, the business problem is not only to detect churn risk, but also to decide \emph{what to do next} for each customer in a cost-effective way. In practice, institutions face three constraints simultaneously: (i) customer behavior is heterogeneous, (ii) interventions have non-negligible costs, and (iii) outcomes are delayed. A pure churn classifier addresses only the first part (who may churn), but it does not optimize intervention choice under cost and delayed feedback. As a result, manual or rule-based campaigns often overuse expensive actions, apply interventions inconsistently across profiles, and optimize retention counts rather than economic impact.
+
+In this report, we use a two-step decision process repeated across the full customer base. At decision time $t_i$, Step 1 computes a churn risk score from the current customer state; only customers with risk above a threshold ($r(x_i)>t$) proceed to Step 2, where one retention action is assigned. The outcome is then evaluated after 90 days. The objective is to maximize expected net business benefit, not only to minimize churn.
+
+This report uses one global churn definition across the full portfolio:
+\begin{quote}
+\textbf{A customer is considered churned if they have closed all of their products.}
+\end{quote}
+
+At decision time $t_i$, outcome is observed at $t_i+90$ days. The label is
+\[
+Y_i=
+\begin{cases}
+1, & \text{if customer } i \text{ has closed all products by } t_i+90,\\
+0, & \text{otherwise.}
+\end{cases}
+\]
+This captures complete customer exit and is directly measurable.
+
+\section{Solution}
+We propose a two-model architecture with one operational objective: autonomous and continuous optimization of retention actions across the full customer base.
+
+Model 1 estimates churn risk from customer state; Model 2 (contextual bandit) assigns the best available action and updates continuously from newly observed outcomes via an online parameter update. This design reduces manual intervention assignment and replaces static, call-centered retention workflows with data-driven action selection.
+
+The key business selling point is the objective itself: the system does not optimize only for retention rate, but for expected net revenue increment. Through cost-aware and value-aware reward design, the policy favors actions that create positive economic impact, not merely lower churn counts.
+
+\section{Model 1: Churn-risk model (trained on past data)}
+Let $i\in\{1,\dots,n\}$ index decision events. The customer state is $x_i\in\mathbb{R}^d$, built from the most recent 9 months (demographics, transactions, days since last activity, digital engagement, product holdings, tenure, and balance summaries; optional segment/cluster/risk features).
+
+The first model estimates churn probability on the 90-day horizon:
+\[
+\rho(x_i)=\Pr(Y_i=1\mid X=x_i),
+\]
+trained on historical supervised data
+\[
+\mathcal{D}^{\text{risk}}=\{(x_i,Y_i)\}_{i=1}^n.
+\]
+In this architecture, Model 1 is trained on past labeled data and refreshed in scheduled batches.
+
+\section{Model 2: Retention action model (continuously updated)}
+The second model is a contextual bandit used in Step 2 of the pipeline (after risk-based activation) for one-shot retention assignment over
+\[
+\mathcal{A}=\{a_0,\dots,a_{K-1}\},
+\]
+where exactly one action $A_i\in\mathcal{A}$ is assigned per customer event. Unlike Model 1, this model is updated continuously as new intervention outcomes arrive.
+
+To ensure robust learning in a hackathon setting, we use a compact and practical action set:
+\[
+\mathcal{A}=\{\text{no action},\ \text{push notification},\ \text{email},\ \text{call}\}.
+\]
+
+\begin{table}[h]
+\centering
+\caption{Retention action set with illustrative normalized costs}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.55\linewidth} >{\centering\arraybackslash}p{0.22\linewidth}}
+\toprule
+Action $a\in\mathcal{A}$ & Cost $c(a)$ \\
+\midrule
+$a_0$: No action & 0.00 \\
+$a_1$: Push notification & 0.05 \\
+$a_2$: Email & 0.10 \\
+$a_3$: Call & 0.90 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Let $c(a)\ge 0$ denote action cost and $\lambda>0$ a cost weight. The reward is
+\[
+R_i=(1-Y_i)-\lambda c(A_i),
+\]
+or, when customer value differs substantially,
+\[
+R_i=(1-Y_i)v_i-\lambda c(A_i),
+\]
+where $v_i$ is an estimate of customer value.
+
+The learning objective for each action $a$ is
+\[
+\mu_a(x)=\mathbb{E}[R\mid X=x,A=a],\qquad
+\pi^\star(x)\in\arg\max_{a\in\mathcal{A}}\mu_a(x).
+\]
+Thus, for each customer profile, the system selects the retention measure with highest expected net benefit.
+
+\textbf{Parameter update rule (online learning).} For implementation, each action has its own parametric reward model
+\[
+\widehat{\mu}_a(x)=\theta_a^\top x,
+\]
+with parameters $\theta_a\in\mathbb{R}^d$. After assigning action $A_i$ to context $x_i$ and observing delayed reward $R_i$, we update only the parameters of the chosen action:
+\[
+\theta_{A_i}\leftarrow \theta_{A_i}+\eta\big(R_i-\theta_{A_i}^\top x_i\big)x_i,
+\]
+where $\eta>0$ is the learning rate. Parameters for actions not chosen at event $i$ remain unchanged. This gives a simple, continuous update mechanism aligned with the bandit feedback structure.
+
+\section{Operational pipeline (customer journey through the system)}
+This is the core business flow. A customer moves through five explicit stages:
+
+\begin{enumerate}
+    \item[\textbf{0)}] \textbf{Train churn-risk model on past data.} Build
+    \[
+    \mathcal{D}^{\text{risk}}=\{(x_i,Y_i)\}_{i=1}^n,
+    \]
+    where $x_i$ uses the last 9 months of state and $Y_i$ indicates full-product-closure churn in the next 90 days. Fit $r(x_i)\approx \Pr(Y_i=1\mid X=x_i)$ from historical labeled records.
+
+    \item[\textbf{1)}] \textbf{Activation gate.} For current customers, compute $r(x_i)$. Enter retention decisioning only if
+    \[
+    r(x_i)>t.
+    \]
+    This focuses spend on customers with meaningful churn risk while keeping one global method for the full base.
+
+    \item[\textbf{2)}] \textbf{Action assignment.} For activated customers, estimate expected reward per action,
+    \[
+    \widehat{\mu}_a(x_i)\approx \mathbb{E}[R\mid X=x_i,A=a],
+    \]
+    and assign
+    \[
+    A_i=\arg\max_{a\in\mathcal{A}}\widehat{\mu}_a(x_i),
+    \]
+    with limited exploration (e.g., $\varepsilon$-greedy) for ongoing learning.
+
+    \item[\textbf{3)}] \textbf{Results after 90 days.} Check whether the customer has closed all products. Compute $Y_i$ and realized reward $R_i$.
+
+    \item[\textbf{4)}] \textbf{Model update.} Append new observations as \((x_i,a_i,v_i,r_i)\), where $v_i$ is \texttt{customer\_value\_score}. For each new event, update only the chosen action model using
+    \[
+    \theta_{a_i}\leftarrow \theta_{a_i}+\eta\big(r_i-\theta_{a_i}^\top x_i\big)x_i,
+    \]
+    while parameters of non-chosen actions remain unchanged. Refresh the churn-risk model periodically in batch mode with newly available \((x_i,Y_i)\) labels.
+\end{enumerate}
+
+\section{Training data, evaluation, and practical constraints}
+Offline action learning requires logged intervention data with action identity:
+\[
+\mathcal{D}^{\text{bandit}}=\{(x_i,a_i,v_i,r_i)\}_{i=1}^n.
+\]
+For targeted campaigns, a filtered view is
+\[
+\mathcal{D}_t=\{(x_i,a_i,v_i,r_i)\mid r(x_i)>t\}_{i=1}^n.
+\]
+
+\begin{table}[h]
+\centering
+\caption{Logged dataset schema for contextual-bandit training}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.18\linewidth} >{\raggedright\arraybackslash}p{0.18\linewidth} >{\raggedright\arraybackslash}p{0.56\linewidth}}
+\toprule
+Field & Type & Description \\
+\midrule
+$x_i$ & Vector & Customer state at decision time, including demographics, engagement, product holdings, and 9 months of behavioral history. \\
+$a_i$ & Categorical & Historical retention action assigned to customer $i$. \\
+$v_i$ & Real & \texttt{customer\_value\_score} used for value-aware optimization. \\
+$r_i$ & Real & Observed reward at $t_i+90$ days. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For hackathon scope, the minimal fields beyond context are action $a_i$ and customer value score $v_i$ (stored as \texttt{customer\_value\_score}), together with the realized reward $r_i$ at 90 days. These fields are sufficient to run the online contextual-bandit update at each new observation.
+
+This approach is appropriate for a hackathon because it is mathematically rigorous, aligned with a two-step workflow (risk gating plus one-shot intervention), and explainable to business and technical reviewers. Main limitations are delayed reward, dependence on logged action data quality, and no explicit modeling of long multi-step customer journeys.
+
+\section{Proof of concept: demonstrating that Model 2 learns}
+To verify that the contextual-bandit component can learn a meaningful policy, we run a controlled proof of concept with a synthetic training log for Model 2.
+
+\textbf{Synthetic data design.} We generate records of the form $(x_i,a_i,v_i,r_i)$ with the same schema used in deployment. The generative behavior is intentionally asymmetric:
+\begin{itemize}
+    \item Actions $a_0$ (no action), $a_1$ (push), and $a_2$ (email) have low statistical retention effect.
+    \item Action $a_3$ (call) has high statistical retention effect.
+\end{itemize}
+Formally, for churn label simulation we set
+\[
+\Pr(Y_i=0\mid A_i=a_3, x_i)\gg \Pr(Y_i=0\mid A_i\in\{a_0,a_1,a_2\}, x_i).
+\]
+At the same time, $a_3$ carries the highest cost $c(a_3)$, so calls are not always optimal under a revenue-aware reward.
+
+\textbf{Expected learning behavior.} Under
+\[
+R_i=(1-Y_i)v_i-\lambda c(A_i),
+\]
+the learned policy should favor $a_3$ when expected retention value is high, but avoid $a_3$ for low-value or low-uplift cases where call cost dominates. This is the key test: the model should not collapse to ``always call''.
+
+\textbf{EDA-based validation on holdout data.} We demonstrate learning with transparent diagnostics:
+\begin{enumerate}
+    \item Compare empirical churn outcomes and average reward by action on the test set.
+    \item Report model-selected action mix by customer value deciles (based on $v_i$).
+    \item Check that call selection probability increases with expected value/uplift, not uniformly for all customers.
+    \item Compare total expected reward of the learned policy against simple baselines (always $a_0$, always $a_3$, and uniform random action).
+\end{enumerate}
+Success criterion: the learned policy allocates many calls where they are economically justified, but still withholds calls in segments where they would generate negative revenue increment. A secondary check is parameter dynamics: the estimated call-model coefficients $\theta_{a_3}$ should stabilize as evidence accumulates, while lower-effect actions show weaker reward-aligned updates.
+
+\section{Conclusion}
+We combine churn awareness and action optimization in one coherent system for the full customer population. The risk model identifies likely churn in the next 90 days from a 9-month state, and the contextual bandit assigns one retention action to maximize expected net benefit.
+
+The primary contribution is decision quality: not only estimating who may churn, but selecting which retention measure should be assigned now, then learning from observed 90-day outcomes.
+
+\end{document}
