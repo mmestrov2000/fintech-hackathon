@@ -23,6 +23,9 @@ data/churn_risk_scores.csv
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
+# Trained model artefacts (rebuild with scripts/train_model.py)
+data/output/*.pkl
+
 # OS / editor cruft
 .DS_Store
 .vscode/

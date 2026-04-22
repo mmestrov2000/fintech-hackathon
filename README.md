@@ -48,6 +48,8 @@ notebooks/
   04_lightgbm_enhanced.ipynb    # LightGBM churn model — 20 enhanced features
   05_contextual_bandit.ipynb    # Contextual bandit for retention action selection
 scripts/
+  data_prep.py                  # Raw CSVs → processed feature datasets
+  train_model.py                # Train + save the enhanced LightGBM churn model
   generate_bandit_dataset.py    # Generates synthetic bandit training data from churn scores
 requirements.txt
 ```
@@ -83,17 +85,47 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run the notebooks in order:
+## Running the pipeline
 
-`01_eda` → `02_data_preparation` → `03_lightgbm_baseline` → `04_lightgbm_enhanced` → `05_contextual_bandit`
+The repo offers **two interoperable entry points** that produce the same CSVs. Use whichever fits your task.
 
-Notebook 05 requires first running:
+### Option A — reproducible scripts (recommended for re-runs)
 
 ```bash
+# 1. Rebuild all processed feature CSVs from raw tables
+python scripts/data_prep.py
+#    → data/processed/churn_features_raw.csv
+#    → data/processed/churn_features_clean.csv
+#    → data/processed/churn_features_enhanced.csv
+
+# 2. Train the enhanced LightGBM churn model
+python scripts/train_model.py
+#    → data/output/churn_model.pkl           (joblib: model + threshold + features)
+#    → data/output/churn_risk_scores_v2.csv  (per-customer risk score + prediction)
+
+# 3. (Optional) Generate the contextual-bandit training dataset
 python scripts/generate_bandit_dataset.py
+#    → data/output/bandit_training_dataset.csv
 ```
 
-which consumes the output of notebook 04.
+`train_model.py` uses fixed, sensible hyperparameters for speed and reproducibility. It does **not** run Optuna, SHAP, or calibration — those live in notebook 04 where exploration belongs. Expect the script's F1 to be lower (~0.42) than the notebook's tuned F1 (0.583).
+
+### Option B — notebooks (recommended for exploration / teaching)
+
+Run the notebooks top-to-bottom:
+
+`00_overview` (read first) →
+`01_eda` → `02_data_preparation` → `03_lightgbm_baseline` → `04_lightgbm_enhanced` → `05_contextual_bandit`
+
+Each notebook writes to the same `data/processed/` and `data/output/` paths as the scripts, so you can mix and match freely (e.g. run `data_prep.py` once, then iterate in notebook 04).
+
+### How notebooks fit into the workflow
+
+- `00_overview.ipynb` — entry point: architecture diagram, pipeline walkthrough, full results table, what worked / what didn't / what to try next.
+- `01_eda.ipynb` — EDA and visual feature construction (teaching version of `data_prep.py`).
+- `02_data_preparation.ipynb` — distribution and correlation checks on the baseline features.
+- `03_lightgbm_baseline.ipynb` / `04_lightgbm_enhanced.ipynb` — the *narrative* version of `train_model.py`, with Optuna, SHAP, calibration, and full plots.
+- `05_contextual_bandit.ipynb` — bandit training + evaluation against static baselines.
 
 ## Results
 
