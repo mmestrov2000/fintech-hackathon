@@ -22,3 +22,8 @@ data/churn_risk_scores.csv
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
+
+# OS / editor cruft
+.DS_Store
+.vscode/
+
